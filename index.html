@@ -53,7 +53,16 @@
    <button class="preset lingerie-only" data-preset="bra"><span class="glyph">♧</span><strong>Corpiño</strong><small>Solo maniquí</small></button>
    <button class="preset lingerie-only" data-preset="briefs"><span class="glyph">▱</span><strong>Bombacha</strong><small>Solo maniquí</small></button>
   </div>
-  <div class="field"><label for="garmentFile">O agregá una prenda propia (PNG transparente recomendado)</label><input id="garmentFileButton" type="button" value="Elegir imagen de prenda" onclick="document.getElementById('garmentFile').click()"><div class="muted-small">JPG, PNG o WEBP. Las imágenes con fondo transparente se integran mejor. En foto real, usá esta opción solo con prendas de uso común.</div></div>
+  <div class="panel garment-upload-panel" style="background:#101a28;border-color:#59729a;margin-top:12px">
+   <h2>📷 Subí la ropa que quieras usar</h2>
+   <p>Elegí una foto de una remera, vestido, pantalón, campera o cualquier prenda. Se agregará como una capa independiente para moverla, agrandarla, girarla y combinarla con otras.</p>
+   <div class="action-row"><button id="garmentFileButton" type="button" class="primary">＋ Elegir foto de mi ropa</button></div>
+   <label class="checkline"><input id="removePlainBg" type="checkbox" checked> Intentar quitar el fondo liso de la foto (blanco, gris o de un solo color)</label>
+   <div class="field"><label for="bgTolerance">Intensidad para quitar el fondo</label><div class="control-head"><span>Más bajo conserva más bordes</span><output id="bgToleranceOut">65</output></div><input id="bgTolerance" type="range" min="20" max="140" value="65"></div>
+   <div class="safe-note">Mejor resultado: fotografiá la prenda extendida sobre una sábana o pared lisa, con la prenda completa dentro de la foto. Para un recorte más limpio, también podés subir un PNG que ya tenga fondo transparente.</div>
+   <div class="preview-strip" id="garmentPreview"></div>
+   <div class="status" id="garmentUploadStatus" role="status" aria-live="polite">Todavía no cargaste una prenda.</div>
+  </div>
   <div class="action-row"><button id="clearLayers">Quitar todas las prendas</button></div>
  </div>
  <div class="panel"><h2>Capas de vestuario</h2><p>Seleccioná una capa y ajustala con los controles. También podés mover la prenda directamente con el dedo.</p><div class="layer-list" id="layerList"><span class="muted-small">Todavía no agregaste prendas.</span></div>
@@ -119,7 +128,57 @@ function addLayer(layer){layers.push(layer);selected=layers.length-1;renderLayer
 $('presetGrid').querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>addPreset(b.dataset.preset));
 $('targetMode').onchange=()=>{const mannequin=$('targetMode').value==='mannequin';$('wardrobePanel').classList.toggle('mannequin-mode',mannequin);$('photoConsent').classList.toggle('hide',mannequin);if(mannequin){createMannequin()}else if(!sourceImage||sourceIsSynthetic){clearPhoto();switchTab('editor');toast('Abrí una foto real en Editor para usar ropa común.')}else{$('wardrobeStatus').textContent='Modo foto: confirmá edad y permiso antes de agregar prendas.'}};
 $('useCurrentPhoto').onclick=()=>{if(!sourceImage||sourceIsSynthetic){switchTab('editor');$('wardrobeStatus').textContent='Primero abrí una foto en la pestaña Editor. Después volvé aquí y tocá “Usar la foto abierta”.';toast('Primero abrí tu foto en Editor.');return}$('targetMode').value='photo';$('clothingType').value='regular';$('photoConsent').classList.remove('hide');switchTab('wardrobe');$('wardrobeStatus').textContent='Foto cargada. Marcá las dos confirmaciones y elegí Remera, Buzo, Pantalón, Vestido o subí tu PNG.';$('photoConsent').scrollIntoView({behavior:'smooth',block:'center'});};$('makeMannequin').onclick=()=>{$('targetMode').value='mannequin';createMannequin();switchTab('wardrobe')};$('clothingType').onchange=()=>{const lingerie=$('clothingType').value==='lingerie';if(lingerie&&$('targetMode').value!=='mannequin'){$('targetMode').value='mannequin';createMannequin();toast('Se cambió al maniquí sintético para probar lencería.')}};
-$('garmentFileButton').onclick=()=>$('garmentFile').click();$('garmentFile').onchange=e=>{const f=e.target.files?.[0];if(!f)return;const intimate=$('clothingType').value==='lingerie';if(intimate&&$('targetMode').value!=='mannequin'){toast('La lencería solo se puede agregar al maniquí.');e.target.value='';return}if($('targetMode').value==='photo'&&(!$('adultOk').checked||!$('consentOk').checked)){toast('Confirmá mayoría de edad y permiso para editar la foto.');e.target.value='';return}const url=URL.createObjectURL(f),im=new Image();im.onload=()=>{addLayer({image:im,name:f.name.replace(/\.[^.]+$/,''),x:canvas.width/2,y:canvas.height*.4,width:im.naturalWidth*Math.min(1,canvas.width*.60/im.naturalWidth,canvas.height*.60/im.naturalHeight),height:im.naturalHeight*Math.min(1,canvas.width*.60/im.naturalWidth,canvas.height*.60/im.naturalHeight),scale:1,angle:0,opacity:1,flip:1});toast('Prenda agregada. Ajustá posición y tamaño.');URL.revokeObjectURL(url)};im.onerror=()=>{URL.revokeObjectURL(url);toast('No se pudo abrir la prenda.')};im.src=url;e.target.value=''};
+$('garmentFileButton').onclick=()=>$('garmentFile').click();
+$('bgTolerance').oninput=e=>$('bgToleranceOut').textContent=e.target.value;
+async function prepareGarmentImage(sourceImage){
+ const maxSide=1400,ratio=Math.min(1,maxSide/Math.max(sourceImage.naturalWidth,sourceImage.naturalHeight));
+ const w=Math.max(1,Math.round(sourceImage.naturalWidth*ratio)),h=Math.max(1,Math.round(sourceImage.naturalHeight*ratio));
+ const work=document.createElement('canvas');work.width=w;work.height=h;
+ const g=work.getContext('2d',{willReadFrequently:true});g.clearRect(0,0,w,h);g.drawImage(sourceImage,0,0,w,h);
+ const imageData=g.getImageData(0,0,w,h),data=imageData.data;
+ if($('removePlainBg').checked){
+  const corners=[0,(w-1)*4,((h-1)*w)*4,((h*w)-1)*4].map(i=>[data[i],data[i+1],data[i+2]]);
+  const tol=Number($('bgTolerance').value),tol2=(tol*1.732)**2;
+  let best=corners[0],bestCount=-1;
+  for(const candidate of corners){const count=corners.filter(other=>((candidate[0]-other[0])**2+(candidate[1]-other[1])**2+(candidate[2]-other[2])**2)<=tol2*2.25).length;if(count>bestCount){best=candidate;bestCount=count}}
+  const cluster=corners.filter(other=>((best[0]-other[0])**2+(best[1]-other[1])**2+(best[2]-other[2])**2)<=tol2*2.25);
+  const bg=[0,1,2].map(k=>cluster.reduce((sum,p)=>sum+p[k],0)/cluster.length);
+  const visited=new Uint8Array(w*h),queue=new Int32Array(w*h);let head=0,tail=0;
+  const add=(idx)=>{if(idx<0||idx>=w*h||visited[idx])return;const p=idx*4;if(data[p+3]===0)return;const d=(data[p]-bg[0])**2+(data[p+1]-bg[1])**2+(data[p+2]-bg[2])**2;if(d>tol2)return;visited[idx]=1;queue[tail++]=idx};
+  for(let x=0;x<w;x++){add(x);add((h-1)*w+x)}
+  for(let y=0;y<h;y++){add(y*w);add(y*w+w-1)}
+  while(head<tail){const idx=queue[head++],p=idx*4;data[p+3]=0;const x=idx%w,y=(idx/w)|0;if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w)}
+  g.putImageData(imageData,0,0);
+ }
+ const pixels=g.getImageData(0,0,w,h).data;let minX=w,minY=h,maxX=-1,maxY=-1;
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(pixels[(y*w+x)*4+3]>12){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}}
+ if(maxX<minX||maxY<minY)throw new Error('No se detectó la prenda. Probá desactivar “quitar fondo” o subir una imagen más clara.');
+ const pad=2,minPX=Math.max(0,minX-pad),minPY=Math.max(0,minY-pad),cropW=Math.min(w-minPX,maxX-minX+1+pad*2),cropH=Math.min(h-minPY,maxY-minY+1+pad*2);
+ const trimmed=document.createElement('canvas');trimmed.width=cropW;trimmed.height=cropH;trimmed.getContext('2d').drawImage(work,minPX,minPY,cropW,cropH,0,0,cropW,cropH);
+ const result=new Image();result.src=trimmed.toDataURL('image/png');await new Promise((resolve,reject)=>{result.onload=resolve;result.onerror=reject});return result;
+}
+$('garmentFile').onchange=async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ const intimate=$('clothingType').value==='lingerie';
+ if(intimate&&$('targetMode').value!=='mannequin'){toast('La lencería solo se puede agregar al maniquí sintético.');e.target.value='';return}
+ if($('targetMode').value==='photo'&&(!$('adultOk').checked||!$('consentOk').checked)){$('photoConsent').classList.remove('hide');toast('Confirmá mayoría de edad y permiso para editar la foto.');e.target.value='';return}
+ if(!canvas.width){toast('Primero abrí tu foto en Editor o creá el maniquí.');e.target.value='';return}
+ $('garmentUploadStatus').textContent='Procesando la prenda localmente…';const url=URL.createObjectURL(f),source=new Image();
+ source.onload=async()=>{
+  try{
+   const im=await prepareGarmentImage(source);
+   const scale=Math.min(1,canvas.width*.62/im.naturalWidth,canvas.height*.62/im.naturalHeight);
+   const layer={image:im,name:f.name.replace(/\.[^.]+$/,'')||'Mi prenda',x:canvas.width/2,y:canvas.height*.40,width:im.naturalWidth*scale,height:im.naturalHeight*scale,scale:1,angle:0,opacity:1,flip:1};
+   addLayer(layer);
+   const preview=$('garmentPreview');preview.innerHTML='';const thumb=document.createElement('img');thumb.className='thumb';thumb.alt='Vista previa de la prenda cargada';thumb.src=im.src;preview.append(thumb);
+   $('garmentUploadStatus').textContent='Prenda cargada: '+f.name+'. Ahora podés moverla sobre la foto y ajustar tamaño, ángulo y opacidad en “Capas de vestuario”.';
+   toast('Tu prenda se agregó como una capa editable.');
+  }catch(err){$('garmentUploadStatus').textContent=err.message||'No se pudo procesar la prenda.';toast(err.message||'No se pudo procesar la prenda.')}
+  URL.revokeObjectURL(url);e.target.value='';
+ };
+ source.onerror=()=>{URL.revokeObjectURL(url);$('garmentUploadStatus').textContent='No se pudo abrir esa imagen.';toast('No se pudo abrir esa imagen.');e.target.value=''};
+ source.src=url;
+};
 function renderLayerList(){const box=$('layerList');box.innerHTML='';if(!layers.length){box.innerHTML='<span class="muted-small">Todavía no agregaste prendas.</span>';return}layers.forEach((l,i)=>{const b=document.createElement('button');b.className='layer-chip'+(i===selected?' active':'');b.textContent=(i+1)+'. '+l.name;b.onclick=()=>{selected=i;renderLayerList();syncLayerControls();draw()};box.append(b)})}
 function syncLayerControls(){const has=selected>=0&&!!layers[selected];['layerScale','layerAngle','layerOpacity','layerCenter','layerFront','layerDelete'].forEach(id=>$(id).disabled=!has);if(!has)return;const l=layers[selected];$('layerScale').value=Math.round(l.scale*100);$('layerAngle').value=Math.round(l.angle);$('layerOpacity').value=Math.round(l.opacity*100);$('layerScaleOut').textContent=Math.round(l.scale*100)+'%';$('layerAngleOut').textContent=Math.round(l.angle)+'°';$('layerOpacityOut').textContent=Math.round(l.opacity*100)+'%'}
 $('layerScale').oninput=e=>{if(selected<0)return;layers[selected].scale=+e.target.value/100;syncLayerControls();draw()};$('layerAngle').oninput=e=>{if(selected<0)return;layers[selected].angle=+e.target.value;syncLayerControls();draw()};$('layerOpacity').oninput=e=>{if(selected<0)return;layers[selected].opacity=+e.target.value/100;syncLayerControls();draw()};$('layerCenter').onclick=()=>{if(selected<0)return;layers[selected].x=canvas.width/2;layers[selected].y=canvas.height/2;draw()};$('layerFront').onclick=()=>{if(selected<0)return;const [l]=layers.splice(selected,1);layers.push(l);selected=layers.length-1;renderLayerList();draw()};$('layerDelete').onclick=()=>{if(selected<0)return;layers.splice(selected,1);selected=Math.min(selected,layers.length-1);renderLayerList();syncLayerControls();draw()};$('clearLayers').onclick=()=>{layers=[];selected=-1;renderLayerList();syncLayerControls();draw();toast('Se quitaron todas las prendas.')};
