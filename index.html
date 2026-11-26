@@ -57,9 +57,9 @@
    <h2>📷 Subí la ropa que quieras usar</h2>
    <p>Elegí una foto de una remera, vestido, pantalón, campera o cualquier prenda. Se agregará como una capa independiente para moverla, agrandarla, girarla y combinarla con otras.</p>
    <div class="action-row"><button id="garmentFileButton" type="button" class="primary">＋ Elegir foto de mi ropa</button></div>
-   <label class="checkline"><input id="removePlainBg" type="checkbox" checked> Intentar quitar el fondo liso de la foto (blanco, gris o de un solo color)</label>
-   <div class="field"><label for="bgTolerance">Intensidad para quitar el fondo</label><div class="control-head"><span>Más bajo conserva más bordes</span><output id="bgToleranceOut">65</output></div><input id="bgTolerance" type="range" min="20" max="140" value="65"></div>
-   <div class="safe-note">Mejor resultado: fotografiá la prenda extendida sobre una sábana o pared lisa, con la prenda completa dentro de la foto. Para un recorte más limpio, también podés subir un PNG que ya tenga fondo transparente.</div>
+   <label class="checkline"><input id="removePlainBg" type="checkbox" checked> Quitar solo un fondo uniforme (no separa ropa de una persona)</label>
+   <div class="field"><label for="bgTolerance">Sensibilidad del fondo</label><div class="control-head"><span>Empezá bajo para no borrar piel ni tela clara</span><output id="bgToleranceOut">25</output></div><input id="bgTolerance" type="range" min="5" max="100" value="25"></div>
+   <div class="safe-note">Importante: si la imagen muestra a una persona usando la ropa, esta herramienta NO reconoce ni separa la prenda del cuerpo. Para evitar que borre partes de piel o tela, lo mejor es subir una foto de la prenda sola (extendida sobre fondo liso) o un PNG transparente. El borrador manual sirve para retoques, no para extraer ropa automáticamente.</div>
    <div class="preview-strip" id="garmentPreview"></div>
    <div id="cutoutEditor" class="panel hide" style="margin-top:12px;background:#0d1521">
     <h2>✂️ Paso 2: dejá solamente la prenda</h2>
